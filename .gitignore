@@ -1,0 +1,17 @@
+# AI assistant files (not part of the project source)
+AGENTS.md
+CLAUDE.md
+.claude/
+
+# Build artifacts
+*.obj
+*.res
+*.exe
+*.ilk
+*.pdb
+*.pgd
+*.pgc
+
+# Editor / OS cruft
+.vs/
+*.user
