@@ -1,8 +1,10 @@
 #include <winuser.h>
+#include "resource.h"
 
-// Phase 1: embed the application manifest only, so the CLI spike test
-// harness gets correct OS capability detection (PerMonitorV2 DPI
-// awareness, supportedOS list) without any application-compatibility
-// shimming. IDI_APP is not referenced yet -- app.ico does not exist
-// until Phase 4 packaging.
+// Manifest embedding, so the app (and the CLI spike test harness) gets
+// correct OS capability detection (PerMonitorV2 DPI awareness,
+// supportedOS list) without any application-compatibility shimming.
 1 RT_MANIFEST "../app.manifest"
+
+// Single static tray icon resource.
+IDI_APP ICON "app.ico"

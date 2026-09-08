@@ -8,8 +8,8 @@ POWER_SUBSYSTEM_DISPATCH g_PowerSubsys = {0};
 const GUID GUID_SRC_ACDC = { 0x5d3e9a59, 0xe9d5, 0x4b00, { 0xa6, 0xbd, 0xff, 0x34, 0xff, 0x51, 0x65, 0x48 } };
 
 // Manualy create GUID to be notified whether Battery Saver is active/inactive
-// GUID_BATTERY_SAVER_STATUS: e00958c0-c213-4ace-ac77-ec5dee0d5ea5
-const GUID GUID_SAVER_STATUS = { 0xe00958c0, 0xc213, 0x4ace, { 0xac, 0x77, 0xec, 0x5d, 0xee, 0x0d, 0x5e, 0xa5 } };
+// GUID_POWER_SAVING_STATUS: e00958c0-c213-4ace-ac77-fecced2eeea5
+const GUID GUID_SAVER_STATUS = { 0xe00958c0, 0xc213, 0x4ace, { 0xac, 0x77, 0xfe, 0xcc, 0xed, 0x2e, 0xee, 0xa5 } };
 
 /**
  * Loads pwrprof.dll and assigns Windows 11 power configuration functions
