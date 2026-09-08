@@ -125,12 +125,28 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
             // Set correct power mode based on item selected
             if (ID >= IDM_AC_EFFICIENCY && ID <= IDM_AC_PERFORMANCE) {
-                DWORD mode = ID - IDM_AC_EFFICIENCY;
-                g_PowerSubsys.SetACMode(mode);
+                const GUID *pMode;
+                if (ID == IDM_AC_EFFICIENCY) {
+                    pMode = &GUID_POWER_MODE_BEST_EFFICIENCY;
+                } else if (ID == IDM_AC_BALANCED) {
+                    pMode = &GUID_POWER_MODE_NONE;
+                } else {
+                    pMode = &GUID_POWER_MODE_BEST_PERFORMANCE;
+                }
+
+                g_PowerSubsys.SetACMode(pMode);
                 Tray_UpdateTooltip(hWnd);
             } else if (ID >= IDM_DC_EFFICIENCY && ID <= IDM_DC_PERFORMANCE) {
-                DWORD mode = ID - IDM_DC_EFFICIENCY;
-                g_PowerSubsys.SetDCMode(mode);
+                const GUID *pMode;
+                if (ID == IDM_DC_EFFICIENCY) {
+                    pMode = &GUID_POWER_MODE_BEST_EFFICIENCY;
+                } else if (ID == IDM_DC_BALANCED) {
+                    pMode = &GUID_POWER_MODE_NONE;
+                } else {
+                    pMode = &GUID_POWER_MODE_BEST_PERFORMANCE;
+                }
+
+                g_PowerSubsys.SetDCMode(pMode);
                 Tray_UpdateTooltip(hWnd);
             } else if (ID == IDM_EXIT) {
                 DestroyWindow(hWnd);

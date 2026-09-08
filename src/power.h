@@ -3,18 +3,14 @@
 
 #include <windows.h>
 
-#define WIN11_POWER_MODE_INVALID ((DWORD)0xFFFFFFFF)
+extern const GUID GUID_POWER_MODE_BEST_EFFICIENCY;
+extern const GUID GUID_POWER_MODE_NONE; // Balanced
+extern const GUID GUID_POWER_MODE_BEST_PERFORMANCE;
 
-typedef enum _WIN11_POWER_MODE {
-    WIN11_POWER_MODE_EFFICIENCY  = 0,
-    WIN11_POWER_MODE_BALANCED    = 1,
-    WIN11_POWER_MODE_PERFORMANCE = 2
-} WIN11_POWER_MODE;
-
-typedef DWORD (WINAPI *PFN_PowerGetUserConfiguredACPowerMode)(DWORD *pMode);
-typedef DWORD (WINAPI *PFN_PowerGetUserConfiguredDCPowerMode)(DWORD *pMode);
-typedef DWORD (WINAPI *PFN_PowerSetUserConfiguredACPowerMode)(DWORD Mode);
-typedef DWORD (WINAPI *PFN_PowerSetUserConfiguredDCPowerMode)(DWORD Mode);
+typedef DWORD (WINAPI *PFN_PowerGetUserConfiguredACPowerMode)(GUID *pMode);
+typedef DWORD (WINAPI *PFN_PowerGetUserConfiguredDCPowerMode)(GUID *pMode);
+typedef DWORD (WINAPI *PFN_PowerSetUserConfiguredACPowerMode)(const GUID *pMode);
+typedef DWORD (WINAPI *PFN_PowerSetUserConfiguredDCPowerMode)(const GUID *pMode);
 
 typedef struct _POWER_SUBSYSTEM_DISPATCH {
     HMODULE hPowrProf;

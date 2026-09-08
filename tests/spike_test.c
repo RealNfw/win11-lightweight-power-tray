@@ -42,13 +42,21 @@ static BOOL GetTrueOSVersion(SPIKE_OSVERSIONINFOEXW *pInfo) {
     return pRtlGetVersion(pInfo) == 0; // STATUS_SUCCESS
 }
 
+// Mode is a GUID, one of exactly three values -- not a DWORD index.
+static const wchar_t *PowerModeName(const GUID *pMode) {
+    if (IsEqualGUID(pMode, &GUID_POWER_MODE_BEST_EFFICIENCY)) return L"Best Power Efficiency";
+    if (IsEqualGUID(pMode, &GUID_POWER_MODE_NONE))            return L"Balanced";
+    if (IsEqualGUID(pMode, &GUID_POWER_MODE_BEST_PERFORMANCE)) return L"Best Performance";
+    return L"Unknown";
+}
+
 int wmain(int argc, wchar_t *argv[]) {
     UNREFERENCED_PARAMETER(argc);
     UNREFERENCED_PARAMETER(argv);
 
     if (PowerSubsystem_Init(FALSE)) {
-        DWORD acMode = WIN11_POWER_MODE_INVALID;
-        DWORD dcMode = WIN11_POWER_MODE_INVALID;
+        GUID acMode = {0};
+        GUID dcMode = {0};
         DWORD acStatus = g_PowerSubsys.GetACMode(&acMode);
         DWORD dcStatus = g_PowerSubsys.GetDCMode(&dcMode);
 
@@ -61,7 +69,8 @@ int wmain(int argc, wchar_t *argv[]) {
             return 1;
         }
 
-        wprintf(L"PASS: AC power mode = %lu, DC power mode = %lu\n", acMode, dcMode);
+        wprintf(L"PASS: AC power mode = %s, DC power mode = %s\n",
+                PowerModeName(&acMode), PowerModeName(&dcMode));
         return 0;
     }
 
