@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write        # create the release
+  id-token: write        # build provenance attestation
+  attestations: write
+
+jobs:
+  release:
+    name: Build and publish (MSVC x64)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC x64 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # /W4 /WX, /MT static CRT, /GS, /guard:cf
+      - name: Build
+        shell: cmd
+        run: build.bat
+
+      # a tag of v1.0.0 must match the VERSIONINFO baked into the binary,
+      # so a forgotten resource.rc bump fails the release instead of shipping
+      - name: Verify version matches tag
+        shell: pwsh
+        run: |
+          $want = "${{ github.ref_name }}" -replace '^v', ''
+          $have = (Get-Item PowerModeTray.exe).VersionInfo.ProductVersion
+          Write-Host "tag=$want  binary=$have"
+          if ($have -ne $want) {
+            Write-Host "::error::Tag is $want but res/resource.rc declares ProductVersion $have"
+            exit 1
+          }
+
+      - name: Verify imports and static CRT
+        shell: pwsh
+        run: |
+          $out = (& dumpbin /nologo /dependents PowerModeTray.exe) | Out-String
+          Write-Host $out
+
+          if ($out -match '(?i)vcruntime|msvcp|msvcr[0-9]|api-ms-win-crt|ucrtbase') {
+            Write-Host "::error::Dynamic CRT dependency found - the /MT static link has regressed"
+            exit 1
+          }
+
+          $allowed = @('kernel32.dll', 'user32.dll', 'shell32.dll', 'advapi32.dll')
+          $deps = [regex]::Matches($out, '(?im)^\s+([A-Za-z0-9_.\-]+\.dll)\s*$') |
+                  ForEach-Object { $_.Groups[1].Value }
+
+          if ($deps.Count -eq 0) {
+            Write-Host "::error::Could not parse any dependencies from dumpbin output"
+            exit 1
+          }
+
+          $bad = $deps | Where-Object { $allowed -notcontains $_.ToLower() }
+          if ($bad) {
+            Write-Host "::error::Unexpected imports: $($bad -join ', ')"
+            exit 1
+          }
+
+      - name: Run spike test
+        shell: cmd
+        run: spike_test.exe
+
+      - name: Generate checksum and release notes
+        shell: pwsh
+        run: |
+          $tag  = "${{ github.ref_name }}"
+          $repo = "${{ github.repository }}"
+          $hash = (Get-FileHash PowerModeTray.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  PowerModeTray.exe" | Out-File -Encoding ascii SHA256SUMS.txt
+          Write-Host "SHA256 = $hash"
+
+          # single-quoted lines keep backticks literal for the markdown fences
+          $lines = @(
+            'Download `PowerModeTray.exe` below and run it. No installer, no runtime.',
+            '',
+            '**SHA-256**',
+            '```',
+            "$hash  PowerModeTray.exe",
+            '```',
+            '',
+            '**SmartScreen**',
+            'This binary is not code-signed, so Windows shows "Windows protected your PC"',
+            'on first run. Choose **More info -> Run anyway**, or verify the hash above first.',
+            '',
+            "Built from ``$tag`` by GitHub Actions with MSVC x64: static CRT (/MT), /GS,",
+            'Control Flow Guard, and imports limited to kernel32/user32/shell32.',
+            'A build provenance attestation is attached and can be verified with:',
+            '```',
+            "gh attestation verify PowerModeTray.exe --repo $repo",
+            '```'
+          )
+          $lines -join "`n" | Out-File -Encoding utf8 RELEASE_NOTES.md
+
+      # free, first-party: cryptographically ties the binary to this workflow run
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: PowerModeTray.exe
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            PowerModeTray.exe SHA256SUMS.txt `
+            --title "${{ github.ref_name }}" `
+            --notes-file RELEASE_NOTES.md

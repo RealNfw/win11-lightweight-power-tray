@@ -10,7 +10,7 @@ Windows 11 moved power mode toggles deep into the Settings app (`ms-settings:pow
 
 - **Fast Switching** — Left- or right-click the tray icon to change AC (Plugged In) and DC (On Battery) modes independently.
 - **Zero Background Polling** — True event-driven design with 0% CPU consumption while idle.
-- **Standalone Binary** — Small, fully self-contained single executable.. No installers, no runtimes, and no Visual C++ Redistributables required.
+- **Standalone Binary** — Small, fully self-contained single executable. No installers, no runtimes, and no Visual C++ Redistributables required.
 - **No Admin Rights** — Runs entirely within standard user permissions (`asInvoker`).
 - **Hardware-Aware** — Automatically greys out battery settings on desktop PCs without batteries.
 
@@ -51,4 +51,4 @@ make
 
 ## License
 
-MIT
+[MIT](LICENSE)

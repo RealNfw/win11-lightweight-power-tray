@@ -1,4 +1,5 @@
 #include <winuser.h>
+#include <winver.h>
 #include "resource.h"
 
 // Manifest embedding, so the app (and the CLI spike test harness) gets
@@ -8,3 +9,34 @@
 
 // Single static tray icon resource.
 IDI_APP ICON "app.ico"
+
+// Shown in Explorer's Properties > Details. Keep FILEVERSION/PRODUCTVERSION and
+// the two version strings in step with the release tag; ci checks this.
+VS_VERSION_INFO VERSIONINFO
+    FILEVERSION     1,0,0,0
+    PRODUCTVERSION  1,0,0,0
+    FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+    FILEFLAGS       0x0L
+    FILEOS          VOS_NT_WINDOWS32
+    FILETYPE        VFT_APP
+    FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"   // US English, Unicode
+        BEGIN
+            VALUE "CompanyName",      "Nicholas Wright"
+            VALUE "FileDescription",  "Win11 Lightweight Power Tray"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "PowerModeTray"
+            VALUE "LegalCopyright",   "Copyright (c) 2026 Nicholas Wright. MIT Licence."
+            VALUE "OriginalFilename", "PowerModeTray.exe"
+            VALUE "ProductName",      "Win11-Lightweight-Power-Tray"
+            VALUE "ProductVersion",   "1.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

@@ -26,7 +26,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nShowCmd);
 
-    MSG uMsg;
+    MSG uMsg = {0};
     WNDCLASSEXW WndCls = {0};
 
     WndCls.cbSize = sizeof(WNDCLASSEXW);
@@ -117,7 +117,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
     // re initialise tray icon if explorer restarts
-    if (uMsg == g_uTaskbarCreatedMsg) {
+    // guard the id, 0 would alias WM_NULL which menu.c posts after every menu
+    if (g_uTaskbarCreatedMsg != 0 && uMsg == g_uTaskbarCreatedMsg) {
         Tray_Init(hWnd);
         return 0;
     }
@@ -159,9 +160,10 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 DWORD status = g_PowerSubsys.SetACMode(pMode);
                 Tray_UpdateTooltip(hWnd);
 
-                // policy or a driver override can refuse the switch, don't fail silently
+                // policy or a driver override can refuse the switch, tell the user
                 if (status != ERROR_SUCCESS) {
-                    MessageBoxW(hWnd, L"Windows refused to change the power mode.", L"Win11PowerModeTray", MB_OK | MB_ICONWARNING);
+                    // NULL owner, our window is 0x0 so a dialog owned by it lands in the corner
+                    MessageBoxW(NULL, L"Windows refused to change the power mode.", L"Win11PowerModeTray", MB_OK | MB_ICONWARNING);
                 }
             } else if (ID >= IDM_DC_EFFICIENCY && ID <= IDM_DC_PERFORMANCE) {
                 const GUID *pMode;
@@ -177,7 +179,7 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 Tray_UpdateTooltip(hWnd);
 
                 if (status != ERROR_SUCCESS) {
-                    MessageBoxW(hWnd, L"Windows refused to change the power mode.", L"Win11PowerModeTray", MB_OK | MB_ICONWARNING);
+                    MessageBoxW(NULL, L"Windows refused to change the power mode.", L"Win11PowerModeTray", MB_OK | MB_ICONWARNING);
                 }
             } else if (ID == IDM_EXIT) {
                 DestroyWindow(hWnd);

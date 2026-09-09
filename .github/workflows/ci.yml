@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# the build only ever reads the checkout
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
