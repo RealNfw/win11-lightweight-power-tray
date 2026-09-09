@@ -15,10 +15,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up MSVC x64 environment
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
         with:
           arch: x64
 
@@ -32,11 +32,27 @@ jobs:
       - name: Verify version matches tag
         shell: pwsh
         run: |
-          $want = "${{ github.ref_name }}" -replace '^v', ''
-          $have = (Get-Item PowerModeTray.exe).VersionInfo.ProductVersion
-          Write-Host "tag=$want  binary=$have"
-          if ($have -ne $want) {
-            Write-Host "::error::Tag is $want but res/resource.rc declares ProductVersion $have"
+          $tag = "${{ github.ref_name }}"
+
+          # v1.2.3 and v1.2.3-rc1 both mean version 1.2.3
+          $want = $tag -replace '^v', '' -replace '-.*$', ''
+
+          $binProduct = (Get-Item PowerModeTray.exe).VersionInfo.ProductVersion
+          $binFile    = (Get-Item PowerModeTray.exe).VersionInfo.FileVersion
+
+          # app.manifest carries its own version, keep it in step or it drifts silently
+          [xml]$m = Get-Content app.manifest
+          $manifest = $m.assembly.assemblyIdentity.version
+
+          Write-Host "tag=$want  binary=$binProduct ($binFile)  manifest=$manifest"
+
+          if ($binProduct -ne $want) {
+            Write-Host "::error::Tag is $want but res/resource.rc declares ProductVersion $binProduct"
+            exit 1
+          }
+
+          if ($manifest -ne "$want.0") {
+            Write-Host "::error::app.manifest declares $manifest, expected $want.0"
             exit 1
           }
 
@@ -103,7 +119,7 @@ jobs:
 
       # free, first-party: cryptographically ties the binary to this workflow run
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: PowerModeTray.exe
 
@@ -112,7 +128,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" `
-            PowerModeTray.exe SHA256SUMS.txt `
-            --title "${{ github.ref_name }}" `
-            --notes-file RELEASE_NOTES.md
+          $tag = "${{ github.ref_name }}"
+          $ghArgs = @(
+            $tag,
+            'PowerModeTray.exe',
+            'SHA256SUMS.txt',
+            '--title', $tag,
+            '--notes-file', 'RELEASE_NOTES.md'
+          )
+          if ($tag -match '-') { $ghArgs += '--prerelease' }
+          gh release create @ghArgs

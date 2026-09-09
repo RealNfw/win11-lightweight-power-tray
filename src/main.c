@@ -6,6 +6,9 @@
 #include "tray.h"
 #include "menu.h"
 
+#define WINDOW_CLASS_NAME L"Win11PowerModeTray_MsgWnd"
+#define MUTEX_NAME        L"Local\\Win11PowerModeTray_Mutex"
+
 static UINT g_uTaskbarCreatedMsg = 0;
 
 // power notification handles, unregistered in WM_DESTROY
@@ -32,10 +35,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     WndCls.cbSize = sizeof(WNDCLASSEXW);
     WndCls.lpfnWndProc = MainWindowProc;
     WndCls.hInstance = hInstance;
-    WndCls.lpszClassName = L"PowerModeTray";
+    WndCls.lpszClassName = WINDOW_CLASS_NAME;
 
     // aqcuire tray mutex
-    HANDLE trayMutex = CreateMutexW(NULL, TRUE, L"Local\\Win11PowerModeTray_Mutex");
+    HANDLE trayMutex = CreateMutexW(NULL, TRUE, MUTEX_NAME);
+
+    // validity first, CloseHandle(NULL) raises under a debugger
+    if (trayMutex == NULL) {
+        return 1;
+    }
 
     // check if mutex already existed, if so, open the window
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
@@ -71,10 +79,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
         CloseHandle(trayMutex);
         return 0;
-    }
-
-    if (trayMutex == NULL) {
-        return 1;
     }
 
     if (!PowerSubsystem_Init(TRUE)) {
@@ -127,12 +131,7 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_CREATE: { // Window created
 
             // seed the flags before Tray_Init, it formats the first tooltip from them
-            SYSTEM_POWER_STATUS sps;
-            if (GetSystemPowerStatus(&sps)) {
-                // 0 = battery, 1 = plugged in, 255 = unknown, treat unknown as AC
-                g_bIsAC = (sps.ACLineStatus != 0);
-                g_bBatterySaverActive = (sps.SystemStatusFlag == 1);
-            }
+            Tray_RefreshPowerFlags();
 
             // subscribe to the only two OS events this app listens for
             g_hPowerSrcNotify  = RegisterPowerSettingNotification(hWnd, &GUID_SRC_ACDC, DEVICE_NOTIFY_WINDOW_HANDLE);

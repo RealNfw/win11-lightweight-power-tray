@@ -11,6 +11,7 @@ extern NOTIFYICONDATAW g_nid;
 extern BOOL g_bIsAC;
 extern BOOL g_bBatterySaverActive;
 
+void Tray_RefreshPowerFlags(void);
 void Tray_Init(HWND hWnd);
 void Tray_UpdateIcon(HWND hWnd);
 void Tray_UpdateTooltip(HWND hWnd);

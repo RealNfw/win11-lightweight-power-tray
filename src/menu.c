@@ -34,6 +34,9 @@ void ShowContextMenu(HWND hWnd, POINT pt) {
     HMENU hMenu = CreatePopupMenu();
     if (!hMenu) return;
 
+    // same as the tooltip, requery rather than trust the cached saver flag
+    Tray_RefreshPowerFlags();
+
     // query live, not cached, the user could've changed this in settings
     GUID acMode = {0};
     GUID dcMode = {0};

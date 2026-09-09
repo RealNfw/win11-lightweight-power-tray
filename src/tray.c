@@ -56,8 +56,21 @@ static HICON LoadScaledTrayIcon(void) {
     return (HICON)LoadImageW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON, cx, cy, LR_DEFAULTCOLOR);
 }
 
+// re-derive from the os, the power broadcasts may never have registered
+void Tray_RefreshPowerFlags(void) {
+    SYSTEM_POWER_STATUS sps;
+    if (GetSystemPowerStatus(&sps)) {
+        // 0 = battery, 1 = plugged in, 255 = unknown, treat unknown as AC
+        g_bIsAC = (sps.ACLineStatus != 0);
+        g_bBatterySaverActive = (sps.SystemStatusFlag == 1);
+    }
+}
+
 // fills g_nid.szTip only, safe to call before the icon exists
 static void FormatTooltipText(void) {
+
+    // don't trust the cached flags, a failed registration would freeze them
+    Tray_RefreshPowerFlags();
 
     // energy saver overrides the configured mode, so report what's actually in effect
     if (g_bBatterySaverActive) {
@@ -110,7 +123,10 @@ void Tray_Init(HWND hWnd) {
     // populate szTip before NIM_ADD since we declare NIF_TIP here
     FormatTooltipText();
 
-    Shell_NotifyIconW(NIM_ADD, &g_nid);
+    // if the shell isn't accepting icons yet, TaskbarCreated brings us back
+    if (!Shell_NotifyIconW(NIM_ADD, &g_nid)) {
+        return;
+    }
 
     // must add first, then upgrade
     g_nid.uVersion = NOTIFYICON_VERSION_4;

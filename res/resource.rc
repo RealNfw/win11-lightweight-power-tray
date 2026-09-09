@@ -29,7 +29,7 @@ BEGIN
             VALUE "FileDescription",  "Win11 Lightweight Power Tray"
             VALUE "FileVersion",      "1.0.0.0"
             VALUE "InternalName",     "PowerModeTray"
-            VALUE "LegalCopyright",   "Copyright (c) 2026 Nicholas Wright. MIT Licence."
+            VALUE "LegalCopyright",   "Copyright (c) 2026 Nicholas Wright. MIT License."
             VALUE "OriginalFilename", "PowerModeTray.exe"
             VALUE "ProductName",      "Win11-Lightweight-Power-Tray"
             VALUE "ProductVersion",   "1.0.0"
