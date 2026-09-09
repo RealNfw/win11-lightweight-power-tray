@@ -11,8 +11,7 @@ const GUID GUID_SRC_ACDC = { 0x5d3e9a59, 0xe9d5, 0x4b00, { 0xa6, 0xbd, 0xff, 0x3
 // GUID_POWER_SAVING_STATUS: e00958c0-c213-4ace-ac77-fecced2eeea5
 const GUID GUID_SAVER_STATUS = { 0xe00958c0, 0xc213, 0x4ace, { 0xac, 0x77, 0xfe, 0xcc, 0xed, 0x2e, 0xee, 0xa5 } };
 
-// The three real Windows 11 power mode values (PowerGetUserConfiguredACPowerMode's
-// output/PowerSetUserConfiguredACPowerMode's input GUID) -- not a DWORD index.
+// the three power mode values, passed as GUIDs not DWORD indexes
 // GUID_POWER_MODE_BEST_EFFICIENCY: 961cc777-2547-4f9d-8174-7d86181b8a7a
 const GUID GUID_POWER_MODE_BEST_EFFICIENCY = { 0x961cc777, 0x2547, 0x4f9d, { 0x81, 0x74, 0x7d, 0x86, 0x18, 0x1b, 0x8a, 0x7a } };
 // GUID_POWER_MODE_NONE ("Balanced"): 00000000-0000-0000-0000-000000000000

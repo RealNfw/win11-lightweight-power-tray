@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <windowsx.h>
 
 #include "resource.h"
 #include "power.h"
@@ -6,6 +7,14 @@
 #include "menu.h"
 
 static UINT g_uTaskbarCreatedMsg = 0;
+
+// power notification handles, unregistered in WM_DESTROY
+static HPOWERNOTIFY g_hPowerSrcNotify = NULL;
+static HPOWERNOTIFY g_hPowerSaveNotify = NULL;
+
+// throttles the hover requery, a hover fires dozens of WM_MOUSEMOVE
+static ULONGLONG g_uLastTooltipRefresh = 0;
+
 LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 /**
@@ -114,11 +123,24 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     }
 
     switch(uMsg) {
-        case WM_CREATE: // Window created
+        case WM_CREATE: { // Window created
+
+            // seed the flags before Tray_Init, it formats the first tooltip from them
+            SYSTEM_POWER_STATUS sps;
+            if (GetSystemPowerStatus(&sps)) {
+                // 0 = battery, 1 = plugged in, 255 = unknown, treat unknown as AC
+                g_bIsAC = (sps.ACLineStatus != 0);
+                g_bBatterySaverActive = (sps.SystemStatusFlag == 1);
+            }
+
+            // subscribe to the only two OS events this app listens for
+            g_hPowerSrcNotify  = RegisterPowerSettingNotification(hWnd, &GUID_SRC_ACDC, DEVICE_NOTIFY_WINDOW_HANDLE);
+            g_hPowerSaveNotify = RegisterPowerSettingNotification(hWnd, &GUID_SAVER_STATUS, DEVICE_NOTIFY_WINDOW_HANDLE);
 
             Tray_Init(hWnd); // initialise tray icon
 
             break;
+        }
         case WM_COMMAND: { // Menu item clicked
 
             DWORD ID = LOWORD(wParam);
@@ -134,8 +156,13 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     pMode = &GUID_POWER_MODE_BEST_PERFORMANCE;
                 }
 
-                g_PowerSubsys.SetACMode(pMode);
+                DWORD status = g_PowerSubsys.SetACMode(pMode);
                 Tray_UpdateTooltip(hWnd);
+
+                // policy or a driver override can refuse the switch, don't fail silently
+                if (status != ERROR_SUCCESS) {
+                    MessageBoxW(hWnd, L"Windows refused to change the power mode.", L"Win11PowerModeTray", MB_OK | MB_ICONWARNING);
+                }
             } else if (ID >= IDM_DC_EFFICIENCY && ID <= IDM_DC_PERFORMANCE) {
                 const GUID *pMode;
                 if (ID == IDM_DC_EFFICIENCY) {
@@ -146,15 +173,71 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     pMode = &GUID_POWER_MODE_BEST_PERFORMANCE;
                 }
 
-                g_PowerSubsys.SetDCMode(pMode);
+                DWORD status = g_PowerSubsys.SetDCMode(pMode);
                 Tray_UpdateTooltip(hWnd);
+
+                if (status != ERROR_SUCCESS) {
+                    MessageBoxW(hWnd, L"Windows refused to change the power mode.", L"Win11PowerModeTray", MB_OK | MB_ICONWARNING);
+                }
             } else if (ID == IDM_EXIT) {
                 DestroyWindow(hWnd);
             }
 
             break;
         }
+        case WM_POWERBROADCAST: { // AC/DC or energy-saver state changed
+
+            if (wParam == PBT_POWERSETTINGCHANGE) {
+                const POWERBROADCAST_SETTING *pSetting = (const POWERBROADCAST_SETTING *)lParam;
+
+                // both registrations arrive here, the GUID tells them apart
+                if (pSetting && pSetting->DataLength >= sizeof(DWORD)) {
+
+                    // payload is a DWORD, Data[0] would only read the low byte
+                    DWORD value = *(const DWORD *)pSetting->Data;
+                    BOOL bChanged = FALSE;
+
+                    if (IsEqualGUID(&pSetting->PowerSetting, &GUID_SRC_ACDC)) {
+                        // 0 = AC (plugged in), 1 = DC (on battery)
+                        g_bIsAC = (value == 0);
+                        bChanged = TRUE;
+                    } else if (IsEqualGUID(&pSetting->PowerSetting, &GUID_SAVER_STATUS)) {
+                        // 0 = off, 1 = energy saver on
+                        g_bBatterySaverActive = (value != 0);
+                        bChanged = TRUE;
+                    }
+
+                    // tooltip names the power source too, so either flag makes it stale
+                    if (bChanged) {
+                        Tray_UpdateTooltip(hWnd);
+                    }
+                }
+            }
+
+            // WM_POWERBROADCAST must return TRUE, not the trailing return 0
+            return TRUE;
+        }
+
+        case WM_DPICHANGED:      // moved to a monitor with different scaling
+        case WM_DISPLAYCHANGE: { // resolution or monitor layout changed
+
+            // cached icon was sized for the old dpi, reload it
+            Tray_UpdateIcon(hWnd);
+
+            break;
+        }
+
         case WM_DESTROY: // Window destroyed
+
+            // drop the power subscriptions before tearing anything else down
+            if (g_hPowerSrcNotify) {
+                UnregisterPowerSettingNotification(g_hPowerSrcNotify);
+                g_hPowerSrcNotify = NULL;
+            }
+            if (g_hPowerSaveNotify) {
+                UnregisterPowerSettingNotification(g_hPowerSaveNotify);
+                g_hPowerSaveNotify = NULL;
+            }
 
             Tray_Cleanup();
             PowerSubsystem_Shutdown();
@@ -165,10 +248,20 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
             UINT uCode = LOWORD(lParam);
 
+            // hover means the tooltip is about to show, requery in case settings changed the mode
+            if (uCode == WM_MOUSEMOVE) {
+                if (GetTickCount64() - g_uLastTooltipRefresh >= 1000) {
+                    g_uLastTooltipRefresh = GetTickCount64();
+                    Tray_UpdateTooltip(hWnd);
+                }
+
+                break;
+            }
+
             // if left/right click and 150ms have passed, show the menu.
             if ((uCode == NIN_SELECT || uCode == WM_CONTEXTMENU) && GetTickCount64() - g_uLastMenuDismissTime >= 150) {
-                POINT pt;
-                GetCursorPos(&pt);
+                // v4 hands us the anchor point in wParam, signed so monitors left of primary work
+                POINT pt = { GET_X_LPARAM(wParam), GET_Y_LPARAM(wParam) };
                 ShowContextMenu(hWnd, pt);
             }
 

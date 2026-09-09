@@ -10,7 +10,7 @@ BOOL g_bBatterySaverActive = FALSE;
 
 static UINT GetCurrentTrayDpi(void) {
 
-    // taskbar's own dpi, not the app's -- they can differ across monitors
+    // taskbar's own dpi, they can differ across monitors
     HWND hTaskbar = FindWindowW(L"Shell_TrayWnd", NULL);
 
     if (hTaskbar) {
@@ -56,9 +56,15 @@ static HICON LoadScaledTrayIcon(void) {
     return (HICON)LoadImageW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON, cx, cy, LR_DEFAULTCOLOR);
 }
 
-// fills g_nid.szTip only -- doesn't talk to the shell, so it's safe to call
-// before the icon even exists yet (Tray_Init) as well as after (Tray_UpdateTooltip)
+// fills g_nid.szTip only, safe to call before the icon exists
 static void FormatTooltipText(void) {
+
+    // energy saver overrides the configured mode, so report what's actually in effect
+    if (g_bBatterySaverActive) {
+        StringCchPrintfW(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"Power Mode: Best Power Efficiency (Energy Saver Active)");
+        return;
+    }
+
     GUID mode = {0};
     DWORD status;
 
@@ -68,32 +74,31 @@ static void FormatTooltipText(void) {
         status = g_PowerSubsys.GetDCMode(&mode);
     }
 
-    if (status == ERROR_SUCCESS) {
+    // mode is a GUID, one of exactly three values, not an index
+    const WCHAR* modeStr = L"Unknown";
 
-        // mode is a GUID, one of exactly three values -- not an index to look up
-        const WCHAR* modeStr;
+    if (status == ERROR_SUCCESS) {
         if (IsEqualGUID(&mode, &GUID_POWER_MODE_BEST_EFFICIENCY)) {
             modeStr = L"Best Power Efficiency";
         } else if (IsEqualGUID(&mode, &GUID_POWER_MODE_NONE)) {
             modeStr = L"Balanced";
         } else if (IsEqualGUID(&mode, &GUID_POWER_MODE_BEST_PERFORMANCE)) {
             modeStr = L"Best Performance";
-        } else {
-            modeStr = L"Unknown";
         }
-
-        // write tooltip message in g_nid.sztip
-        StringCchPrintfW(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"Power Mode: %s (%s)", modeStr, g_bIsAC ? L"Plugged in" : L"On Battery");
     }
+
+    // write unconditionally, a failed query must not leave stale text behind
+    StringCchPrintfW(g_nid.szTip, ARRAYSIZE(g_nid.szTip), L"Power Mode: %s (%s)", modeStr, g_bIsAC ? L"Plugged in" : L"On Battery");
 }
 
 void Tray_Init(HWND hWnd) {
 
+    // free the old handle before reloading
+    if (g_nid.hIcon) {
+        DestroyIcon(g_nid.hIcon);
+    }
+
     // setup notifyiconw payload
-    // cbSize is how the shell picks which NOTIFYICONDATA layout/behaviour to use.
-    // Leaving it 0 makes Shell_NotifyIconW still return TRUE, but the icon stays
-    // on legacy (pre-v4) semantics -- NIM_SETVERSION is silently ignored and
-    // clicks arrive as raw WM_LBUTTONUP/WM_RBUTTONUP instead of NIN_SELECT/WM_CONTEXTMENU.
     g_nid.cbSize = sizeof(g_nid);
     g_nid.hWnd = hWnd;
     g_nid.uID = ID_TRAY_ICON;
@@ -102,22 +107,22 @@ void Tray_Init(HWND hWnd) {
 
     g_nid.hIcon = LoadScaledTrayIcon();
 
-    // populate szTip before NIM_ADD -- we declare NIF_TIP right here, so the
-    // text should already be correct at the moment the icon is born, not
-    // patched in via a second call right after
+    // populate szTip before NIM_ADD since we declare NIF_TIP here
     FormatTooltipText();
 
     Shell_NotifyIconW(NIM_ADD, &g_nid);
 
-    // must add first, then upgrade -- can't create an icon already at v4
+    // must add first, then upgrade
     g_nid.uVersion = NOTIFYICON_VERSION_4;
     Shell_NotifyIconW(NIM_SETVERSION, &g_nid);
 }
 
 void Tray_UpdateIcon(HWND hWnd) {
 
-    // called on dpi/display change -- old handle's size may no longer be right, reload it
-    DestroyIcon(g_nid.hIcon);
+    // called on dpi/display change, old handle's size may no longer be right, reload it
+    if (g_nid.hIcon) {
+        DestroyIcon(g_nid.hIcon);
+    }
     g_nid.hIcon = LoadScaledTrayIcon();
 
     g_nid.uFlags = NIF_ICON;
@@ -145,8 +150,7 @@ void Tray_GetAnchorPoint(HWND hWnd, POINT *pPt) {
     RECT rcIcon;
 
     if (SUCCEEDED(Shell_NotifyIconGetRect(&nidIdent, &rcIcon))) {
-        // top-right of the icon -- pairs with menu.c's TPM_RIGHTALIGN | TPM_BOTTOMALIGN
-        // so the menu expands up-and-left from here, same as a real click would
+        // top-right of the icon, so the menu expands up-and-left like a real click
         pPt->x = rcIcon.right;
         pPt->y = rcIcon.top;
         return;
@@ -155,7 +159,8 @@ void Tray_GetAnchorPoint(HWND hWnd, POINT *pPt) {
     // if getrect fails, fallback to putting it in corner
     HWND hTaskbar = FindWindowW(L"Shell_TrayWnd", NULL);
     HMONITOR hMon = MonitorFromWindow(hTaskbar ? hTaskbar : hWnd, MONITOR_DEFAULTTONEAREST);
-    MONITORINFO mi = {sizeof(MONITORINFO)};
+    MONITORINFO mi = {0};
+    mi.cbSize = sizeof(mi);
 
     if (GetMonitorInfoW(hMon, &mi)) {
         pPt->x = mi.rcWork.right;

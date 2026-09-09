@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  msvc:
+    name: MSVC (x64)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC x64 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # build.bat compiles with /W4 /WX, so any warning fails this step.
+      - name: Build
+        shell: cmd
+        run: build.bat
+
+      # AGENTS.md section 2: the shipped binary must import nothing but these four
+      # system DLLs, and must not pull in a redistributable CRT (/MT static link).
+      - name: Verify imports and static CRT
+        shell: pwsh
+        run: |
+          $out = (& dumpbin /nologo /dependents PowerModeTray.exe) | Out-String
+          Write-Host $out
+
+          if ($out -match '(?i)vcruntime|msvcp|msvcr[0-9]|api-ms-win-crt|ucrtbase') {
+            Write-Host "::error::Dynamic CRT dependency found - the /MT static link has regressed"
+            exit 1
+          }
+
+          $allowed = @('kernel32.dll', 'user32.dll', 'shell32.dll', 'advapi32.dll')
+          $deps = [regex]::Matches($out, '(?im)^\s+([A-Za-z0-9_.\-]+\.dll)\s*$') |
+                  ForEach-Object { $_.Groups[1].Value }
+
+          if ($deps.Count -eq 0) {
+            Write-Host "::error::Could not parse any dependencies from dumpbin output"
+            exit 1
+          }
+
+          $bad = $deps | Where-Object { $allowed -notcontains $_.ToLower() }
+          if ($bad) {
+            Write-Host "::error::Unexpected imports: $($bad -join ', ')"
+            exit 1
+          }
+
+          Write-Host "OK - imports limited to: $($deps -join ', ')"
+
+      - name: Report binary size
+        shell: pwsh
+        run: |
+          foreach ($f in 'PowerModeTray.exe', 'spike_test.exe') {
+            $len = (Get-Item $f).Length
+            Write-Host ("{0,-20} {1,7} bytes ({2} KB)" -f $f, $len, [math]::Round($len / 1KB, 1))
+          }
+
+      # Phase 1 harness: exit 0 on pass or on an expected down-level skip, 1 on failure.
+      - name: Run spike test
+        shell: cmd
+        run: spike_test.exe
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: PowerModeTray-msvc-x64
+          path: PowerModeTray.exe
+          if-no-files-found: error
+
+  mingw:
+    name: MinGW-w64 (x64)
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSYS2 MinGW64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-binutils
+
+      # EXTRA_CFLAGS=-Werror promotes -Wall -Wextra to hard failures for CI only,
+      # leaving local `make` warnings non-fatal.
+      - name: Build
+        run: make EXTRA_CFLAGS=-Werror
+
+      - name: Run spike test
+        run: ./spike_test.exe
