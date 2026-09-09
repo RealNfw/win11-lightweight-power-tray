@@ -11,6 +11,8 @@ typedef DWORD (WINAPI *PFN_PowerGetUserConfiguredACPowerMode)(GUID *pMode);
 typedef DWORD (WINAPI *PFN_PowerGetUserConfiguredDCPowerMode)(GUID *pMode);
 typedef DWORD (WINAPI *PFN_PowerSetUserConfiguredACPowerMode)(const GUID *pMode);
 typedef DWORD (WINAPI *PFN_PowerSetUserConfiguredDCPowerMode)(const GUID *pMode);
+// the mode actually in force, which energy saver overrides. optional, see power.c
+typedef DWORD (WINAPI *PFN_PowerGetEffectiveOverlayScheme)(GUID *pMode);
 
 typedef struct _POWER_SUBSYSTEM_DISPATCH {
     HMODULE hPowrProf;
@@ -18,12 +20,12 @@ typedef struct _POWER_SUBSYSTEM_DISPATCH {
     PFN_PowerGetUserConfiguredDCPowerMode GetDCMode;
     PFN_PowerSetUserConfiguredACPowerMode SetACMode;
     PFN_PowerSetUserConfiguredDCPowerMode SetDCMode;
+    PFN_PowerGetEffectiveOverlayScheme GetEffectiveMode;
 } POWER_SUBSYSTEM_DISPATCH;
 
 extern POWER_SUBSYSTEM_DISPATCH g_PowerSubsys;
 
 extern const GUID GUID_SRC_ACDC;
-extern const GUID GUID_SAVER_STATUS;
 
 BOOL PowerSubsystem_Init(BOOL bShowDialogOnFailure);
 void PowerSubsystem_Shutdown(void);

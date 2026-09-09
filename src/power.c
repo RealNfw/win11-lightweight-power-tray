@@ -7,10 +7,6 @@ POWER_SUBSYSTEM_DISPATCH g_PowerSubsys = {0};
 // GUID_ACDC_POWER_SOURCE: 5d3e9a59-e9d5-4b00-a6bd-ff34ff516548
 const GUID GUID_SRC_ACDC = { 0x5d3e9a59, 0xe9d5, 0x4b00, { 0xa6, 0xbd, 0xff, 0x34, 0xff, 0x51, 0x65, 0x48 } };
 
-// Manualy create GUID to be notified whether Battery Saver is active/inactive
-// GUID_POWER_SAVING_STATUS: e00958c0-c213-4ace-ac77-fecced2eeea5
-const GUID GUID_SAVER_STATUS = { 0xe00958c0, 0xc213, 0x4ace, { 0xac, 0x77, 0xfe, 0xcc, 0xed, 0x2e, 0xee, 0xa5 } };
-
 // the three power mode values, passed as GUIDs not DWORD indexes
 // GUID_POWER_MODE_BEST_EFFICIENCY: 961cc777-2547-4f9d-8174-7d86181b8a7a
 const GUID GUID_POWER_MODE_BEST_EFFICIENCY = { 0x961cc777, 0x2547, 0x4f9d, { 0x81, 0x74, 0x7d, 0x86, 0x18, 0x1b, 0x8a, 0x7a } };
@@ -47,6 +43,10 @@ BOOL PowerSubsystem_Init(BOOL bShowDialogOnFailure) {
     g_PowerSubsys.GetDCMode = (PFN_PowerGetUserConfiguredDCPowerMode) GetProcAddress(g_PowerSubsys.hPowrProf, "PowerGetUserConfiguredDCPowerMode");
     g_PowerSubsys.SetACMode = (PFN_PowerSetUserConfiguredACPowerMode) GetProcAddress(g_PowerSubsys.hPowrProf, "PowerSetUserConfiguredACPowerMode");
     g_PowerSubsys.SetDCMode = (PFN_PowerSetUserConfiguredDCPowerMode) GetProcAddress(g_PowerSubsys.hPowrProf, "PowerSetUserConfiguredDCPowerMode");
+
+    // optional, deliberately not in the required check below. only used to spot
+    // energy saver, so an older build without it degrades instead of refusing to run
+    g_PowerSubsys.GetEffectiveMode = (PFN_PowerGetEffectiveOverlayScheme) GetProcAddress(g_PowerSubsys.hPowrProf, "PowerGetEffectiveOverlayScheme");
 
     // if NULL, powrprof.dll is probably missing from System32
     if (!g_PowerSubsys.GetACMode || !g_PowerSubsys.GetDCMode || !g_PowerSubsys.SetACMode || !g_PowerSubsys.SetDCMode) {

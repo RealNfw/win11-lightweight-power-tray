@@ -11,9 +11,8 @@
 
 static UINT g_uTaskbarCreatedMsg = 0;
 
-// power notification handles, unregistered in WM_DESTROY
+// power notification handle, unregistered in WM_DESTROY
 static HPOWERNOTIFY g_hPowerSrcNotify = NULL;
-static HPOWERNOTIFY g_hPowerSaveNotify = NULL;
 
 // throttles the hover requery, a hover fires dozens of WM_MOUSEMOVE
 static ULONGLONG g_uLastTooltipRefresh = 0;
@@ -133,9 +132,8 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             // seed the flags before Tray_Init, it formats the first tooltip from them
             Tray_RefreshPowerFlags();
 
-            // subscribe to the only two OS events this app listens for
-            g_hPowerSrcNotify  = RegisterPowerSettingNotification(hWnd, &GUID_SRC_ACDC, DEVICE_NOTIFY_WINDOW_HANDLE);
-            g_hPowerSaveNotify = RegisterPowerSettingNotification(hWnd, &GUID_SAVER_STATUS, DEVICE_NOTIFY_WINDOW_HANDLE);
+            // the only OS event this app listens for, energy saver is derived just-in-time
+            g_hPowerSrcNotify = RegisterPowerSettingNotification(hWnd, &GUID_SRC_ACDC, DEVICE_NOTIFY_WINDOW_HANDLE);
 
             Tray_Init(hWnd); // initialise tray icon
 
@@ -186,32 +184,20 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
             break;
         }
-        case WM_POWERBROADCAST: { // AC/DC or energy-saver state changed
+        case WM_POWERBROADCAST: { // AC/DC state changed
 
             if (wParam == PBT_POWERSETTINGCHANGE) {
                 const POWERBROADCAST_SETTING *pSetting = (const POWERBROADCAST_SETTING *)lParam;
 
-                // both registrations arrive here, the GUID tells them apart
-                if (pSetting && pSetting->DataLength >= sizeof(DWORD)) {
+                if (pSetting && pSetting->DataLength >= sizeof(DWORD)
+                    && IsEqualGUID(&pSetting->PowerSetting, &GUID_SRC_ACDC)) {
 
                     // payload is a DWORD, Data[0] would only read the low byte
-                    DWORD value = *(const DWORD *)pSetting->Data;
-                    BOOL bChanged = FALSE;
+                    // 0 = AC (plugged in), 1 = DC (on battery)
+                    g_bIsAC = (*(const DWORD *)pSetting->Data == 0);
 
-                    if (IsEqualGUID(&pSetting->PowerSetting, &GUID_SRC_ACDC)) {
-                        // 0 = AC (plugged in), 1 = DC (on battery)
-                        g_bIsAC = (value == 0);
-                        bChanged = TRUE;
-                    } else if (IsEqualGUID(&pSetting->PowerSetting, &GUID_SAVER_STATUS)) {
-                        // 0 = off, 1 = energy saver on
-                        g_bBatterySaverActive = (value != 0);
-                        bChanged = TRUE;
-                    }
-
-                    // tooltip names the power source too, so either flag makes it stale
-                    if (bChanged) {
-                        Tray_UpdateTooltip(hWnd);
-                    }
+                    // tooltip names the power source, so this makes it stale
+                    Tray_UpdateTooltip(hWnd);
                 }
             }
 
@@ -230,14 +216,10 @@ LRESULT CALLBACK MainWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_DESTROY: // Window destroyed
 
-            // drop the power subscriptions before tearing anything else down
+            // drop the power subscription before tearing anything else down
             if (g_hPowerSrcNotify) {
                 UnregisterPowerSettingNotification(g_hPowerSrcNotify);
                 g_hPowerSrcNotify = NULL;
-            }
-            if (g_hPowerSaveNotify) {
-                UnregisterPowerSettingNotification(g_hPowerSaveNotify);
-                g_hPowerSaveNotify = NULL;
             }
 
             Tray_Cleanup();

@@ -62,7 +62,25 @@ void Tray_RefreshPowerFlags(void) {
     if (GetSystemPowerStatus(&sps)) {
         // 0 = battery, 1 = plugged in, 255 = unknown, treat unknown as AC
         g_bIsAC = (sps.ACLineStatus != 0);
-        g_bBatterySaverActive = (sps.SystemStatusFlag == 1);
+    }
+
+    // SystemStatusFlag only tracks legacy battery saver, dead since win11 24h2.
+    // energy saver instead shows up as efficiency being forced over what's configured.
+    g_bBatterySaverActive = FALSE;
+
+    if (g_PowerSubsys.GetEffectiveMode) {
+        GUID effective = {0};
+        GUID configured = {0};
+
+        DWORD statusEff = g_PowerSubsys.GetEffectiveMode(&effective);
+        DWORD statusCfg = g_bIsAC ? g_PowerSubsys.GetACMode(&configured)
+                                  : g_PowerSubsys.GetDCMode(&configured);
+
+        // require efficiency specifically, so the tooltip's wording stays true
+        if (statusEff == ERROR_SUCCESS && statusCfg == ERROR_SUCCESS) {
+            g_bBatterySaverActive = !IsEqualGUID(&effective, &configured)
+                                    && IsEqualGUID(&effective, &GUID_POWER_MODE_BEST_EFFICIENCY);
+        }
     }
 }
 
