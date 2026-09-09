@@ -1,0 +1,18 @@
+version: 2
+
+updates:
+  # Actions are pinned to commit SHAs, which never update on their own.
+  # Dependabot bumps the SHA and the trailing "# vX.Y.Z" comment together.
+  - package-ecosystem: "github-actions"
+    directory: "/"                 # covers .github/workflows/
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # one PR for all action bumps rather than one per action
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 5
